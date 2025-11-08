@@ -2,17 +2,19 @@ pipeline {
     agent any
 
     environment {
-        DEPLOY_USER = 'ubuntu'               // <-- change if your portfolio server user is different
-        DEPLOY_HOST = '172.31.13.58'       // <-- replace with your portfolio server IP
-        DEPLOY_PATH = '/var/www/html'
-        SSH_CREDENTIALS_ID = 'jenkinskey' // Jenkins SSH credentials ID
+        DEPLOY_USER = 'ubuntu'                // <-- your remote server username
+        DEPLOY_HOST = '172.31.13.58'          // <-- your EC2 public or private IP
+        DEPLOY_PATH = '/var/www/html'         // <-- web root
+        SSH_CREDENTIALS_ID = 'jenkinskey'     // <-- Jenkins credentials ID
+        REPO_URL = 'https://github.com/Maheshshelke05/maheshportfolio-.git'
+        BRANCH = 'main'
     }
 
     stages {
         stage('Checkout Code') {
             steps {
                 echo '📦 Checking out portfolio code from GitHub...'
-                git branch: 'main', url: 'https://github.com/Maheshshelke05/maheshportfolio-.git'
+                git branch: "${BRANCH}", url: "${REPO_URL}"
             }
         }
 
@@ -21,12 +23,16 @@ pipeline {
                 echo '⚙️ Setting up Nginx and cleaning old files on remote server...'
                 sshagent (credentials: ["${SSH_CREDENTIALS_ID}"]) {
                     sh """
-                    ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} '
-                        sudo apt update -y &&
-                        sudo apt install nginx -y &&
-                        sudo systemctl enable nginx &&
-                        sudo systemctl start nginx &&
-                        sudo rm -rf ${DEPLOY_PATH}/*'
+                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} '
+                            sudo apt update -y &&
+                            sudo apt install nginx -y &&
+                            sudo systemctl enable nginx &&
+                            sudo systemctl start nginx &&
+                            sudo mkdir -p ${DEPLOY_PATH} &&
+                            sudo chown -R ${DEPLOY_USER}:${DEPLOY_USER} ${DEPLOY_PATH} &&
+                            sudo chmod -R 755 ${DEPLOY_PATH} &&
+                            sudo rm -rf ${DEPLOY_PATH}/*
+                        '
                     """
                 }
             }
@@ -37,10 +43,12 @@ pipeline {
                 echo '🚀 Deploying new portfolio build to server...'
                 sshagent (credentials: ["${SSH_CREDENTIALS_ID}"]) {
                     sh """
-                    scp -o StrictHostKeyChecking=no -r * ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/
-                    ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} '
-                        sudo chown -R www-data:www-data ${DEPLOY_PATH} &&
-                        sudo systemctl restart nginx'
+                        scp -o StrictHostKeyChecking=no -r img index.html ${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/
+                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} '
+                            sudo mv /tmp/index.html ${DEPLOY_PATH}/ &&
+                            sudo mv /tmp/img ${DEPLOY_PATH}/ &&
+                            sudo systemctl restart nginx
+                        '
                     """
                 }
             }
@@ -49,7 +57,7 @@ pipeline {
 
     post {
         success {
-            echo '✅ Portfolio successfully deployed and Nginx is running!'
+            echo '✅ Deployment successful! Visit your EC2 IP in browser to see your portfolio.'
         }
         failure {
             echo '❌ Deployment failed. Please check Jenkins logs.'
