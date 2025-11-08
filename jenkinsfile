@@ -12,7 +12,7 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 echo '📦 Checking out portfolio code from GitHub...'
-                git branch: 'main', url: 'git@github.com:Maheshshelke05/maheshportfolio-.git'
+                git branch: 'main', url: 'https://github.com/Maheshshelke05/maheshportfolio-.git'
             }
         }
 
