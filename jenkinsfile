@@ -1,0 +1,58 @@
+pipeline {
+    agent any
+
+    environment {
+        DEPLOY_USER = 'ubuntu'               // <-- change if your portfolio server user is different
+        DEPLOY_HOST = '172.31.13.58'       // <-- replace with your portfolio server IP
+        DEPLOY_PATH = '/var/www/html'
+        SSH_CREDENTIALS_ID = 'jenkinskey' // Jenkins SSH credentials ID
+    }
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                echo '📦 Checking out portfolio code from GitHub...'
+                git branch: 'main', url: 'https://github.com/YourUserName/YourPortfolioRepo.git'
+            }
+        }
+
+        stage('Prepare Deployment Server') {
+            steps {
+                echo '⚙️ Setting up Nginx and cleaning old files on remote server...'
+                sshagent (credentials: ["${SSH_CREDENTIALS_ID}"]) {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} '
+                        sudo apt update -y &&
+                        sudo apt install nginx -y &&
+                        sudo systemctl enable nginx &&
+                        sudo systemctl start nginx &&
+                        sudo rm -rf ${DEPLOY_PATH}/*'
+                    """
+                }
+            }
+        }
+
+        stage('Deploy Portfolio') {
+            steps {
+                echo '🚀 Deploying new portfolio build to server...'
+                sshagent (credentials: ["${SSH_CREDENTIALS_ID}"]) {
+                    sh """
+                    scp -o StrictHostKeyChecking=no -r * ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/
+                    ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} '
+                        sudo chown -R www-data:www-data ${DEPLOY_PATH} &&
+                        sudo systemctl restart nginx'
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Portfolio successfully deployed and Nginx is running!'
+        }
+        failure {
+            echo '❌ Deployment failed. Please check Jenkins logs.'
+        }
+    }
+}
